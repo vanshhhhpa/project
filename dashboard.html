@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard - Creative Hub</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand">Creative Hub</div>
+    <div class="nav-actions">
+      <a id="logout" class="btn btn-outline">Logout</a>
+    </div>
+  </nav>
+  <main class="container">
+    <h2>Your Dashboard</h2>
+    <div id="designerSection"></div>
+    <div id="clientSection"></div>
+  </main>
+  <script>
+    const user = JSON.parse(localStorage.getItem('user')||'null');
+    if (!user) location.href = '/login.html';
+    document.getElementById('logout').addEventListener('click', ()=>{ localStorage.clear(); location.href='/'; });
+
+    if (user.role === 'designer') {
+      document.getElementById('designerSection').innerHTML = `
+        <section class="card">
+          <h3>Create a Gig</h3>
+          <form id="createGig">
+            <input name="title" placeholder="Title" required />
+            <textarea name="description" placeholder="Description" required></textarea>
+            <input name="price" placeholder="Price (USD)" required />
+            <input name="image" placeholder="Image URL (optional)" />
+            <button class="btn" type="submit">Create Gig</button>
+          </form>
+        </section>
+        <section class="card"><h3>Your Gigs</h3><div id="myGigs"></div></section>
+      `;
+      fetchMyGigs();
+      document.getElementById('createGig').addEventListener('submit', async (e)=>{
+        e.preventDefault(); const f=new FormData(e.target); const body={title:f.get('title'),description:f.get('description'),price:parseFloat(f.get('price')),image:f.get('image')};
+        const res = await fetch('/api/gigs',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('token')},body:JSON.stringify(body)});
+        if (res.ok) { fetchMyGigs(); e.target.reset(); } else { alert((await res.json()).message||'Error'); }
+      });
+    }
+
+    if (user.role === 'client') {
+      document.getElementById('clientSection').innerHTML = `<section class="card"><h3>Your Orders</h3><div id="orders"></div></section>`;
+      fetch('/api/orders/me',{headers:{'Authorization':'Bearer '+localStorage.getItem('token')}}).then(r=>r.json()).then(data=>{ document.getElementById('orders').innerHTML = data.map(o=>`<div class="mini">Order for ${o.gigId.title} — ${o.paymentStatus}</div>`).join('') });
+    }
+
+    async function fetchMyGigs(){
+      const res = await fetch('/api/gigs/designer/me',{headers:{'Authorization':'Bearer '+localStorage.getItem('token')}});
+      const gigs = await res.json();
+      document.getElementById('myGigs').innerHTML = gigs.map(g=>`<div class="mini"><strong>${g.title}</strong> — $${g.price} <button data-id="${g._id}" class="del">Delete</button></div>`).join('');
+      document.querySelectorAll('.del').forEach(b=>b.addEventListener('click', async (e)=>{ const id=e.target.dataset.id; await fetch('/api/gigs/'+id,{method:'DELETE',headers:{'Authorization':'Bearer '+localStorage.getItem('token')}}); fetchMyGigs(); }));
+    }
+  </script>
+</body>
+</html>
